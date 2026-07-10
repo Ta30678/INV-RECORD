@@ -1,11 +1,19 @@
 import { ItemView, type WorkspaceLeaf } from "obsidian";
+import { listVaultNotes } from "../commands/scaffold";
 import type InvRecordPlugin from "../main";
+import { findStockNoteByTicker } from "../trades/noteLinks";
 import {
   buildPositions,
-  realizedThisYear,
+  dashboardRangeLabel,
+  filterRealizedByRange,
+  resolveDashboardRange,
   summarizeRealized,
+  summarizeRealizedByTicker,
+  summarizeRealizedTotals,
+  totalInvestedCost,
+  type DashboardRangeKey,
 } from "../trades/portfolio";
-import type { Position } from "../types";
+import type { Position, RealizedByTickerRow } from "../types";
 import {
   formatTaiwanDateTime,
   formatTaiwanDateTimeShort,
@@ -13,6 +21,14 @@ import {
 } from "../utils/time";
 
 export const DASHBOARD_VIEW_TYPE = "inv-record-dashboard";
+
+const RANGE_KEYS: DashboardRangeKey[] = [
+  "thisMonth",
+  "lastMonth",
+  "thisYear",
+  "last365",
+  "all",
+];
 
 const fmtInt = new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 0 });
 const fmtPrice = new Intl.NumberFormat("zh-TW", {
@@ -143,22 +159,79 @@ export class DashboardView extends ItemView {
       });
     }
 
+    // ── 時間範圍選擇（只約束已實現指標，見下方持倉表附註） ──
+    const today = taiwanToday();
+    const rangeKey = s.dashboardRange;
+    const range = resolveDashboardRange(rangeKey, today);
+    const periodRealized = filterRealizedByRange(
+      store.fifo.realized,
+      range.from,
+      range.to
+    );
+    const periodTotals = summarizeRealizedTotals(periodRealized);
+    const rangeLabel = dashboardRangeLabel(rangeKey);
+
+    const rangeBar = container.createDiv({ cls: "inv-dash-range" });
+    for (const key of RANGE_KEYS) {
+      const btn = rangeBar.createEl("button", {
+        cls: "inv-dash-range-btn",
+        text: dashboardRangeLabel(key),
+      });
+      btn.toggleClass("is-active", key === rangeKey);
+      btn.addEventListener("click", () => {
+        if (s.dashboardRange === key) return;
+        s.dashboardRange = key;
+        void this.plugin.saveSettings();
+        this.render();
+      });
+    }
+
     // ── 摘要卡 ──
     const totalValue = positions.reduce((sum, p) => sum + (p.marketValue ?? 0), 0);
     const totalUnrealized = positions.reduce(
       (sum, p) => sum + (p.unrealizedPnl ?? 0),
       0
     );
-    const today = taiwanToday();
-    const yearRealized = realizedThisYear(store.fifo.realized, today);
+    const totalCost = positions.reduce((sum, p) => sum + p.totalCost, 0);
+    const unrealizedPct = totalCost > 0 ? (totalUnrealized / totalCost) * 100 : null;
 
     const cards = container.createDiv({ cls: "inv-dash-cards" });
     this.card(cards, "總市值", money(totalValue), "");
-    this.card(cards, "未實現損益", signed(totalUnrealized), pnlClass(totalUnrealized, s.taiwanColors));
-    this.card(cards, "今年已實現", signed(yearRealized), pnlClass(yearRealized, s.taiwanColors));
+    this.card(
+      cards,
+      "未實現損益",
+      signed(totalUnrealized),
+      pnlClass(totalUnrealized, s.taiwanColors),
+      unrealizedPct !== null ? pct(unrealizedPct) : "—"
+    );
+    this.card(
+      cards,
+      `已實現損益（${rangeLabel}）`,
+      signed(periodTotals.pnl),
+      pnlClass(periodTotals.pnl, s.taiwanColors),
+      periodTotals.returnPct !== null ? pct(periodTotals.returnPct) : "—"
+    );
 
-    // ── 持倉表 ──
-    container.createEl("h5", { text: `持倉（${positions.length}）` });
+    if (rangeKey === "all") {
+      // 「全部」時分子（累計已實現＋目前未實現）與分母（累計買進投入成本）口徑
+      // 天然一致，不需歷史估值，是唯一誠實的合併 ROI（見 v1.1 決策備忘）。
+      const invested = totalInvestedCost(store.trades);
+      const totalPnl = periodTotals.pnl + totalUnrealized;
+      const totalReturnPct = invested > 0 ? (totalPnl / invested) * 100 : null;
+      this.card(
+        cards,
+        "總績效（成立以來）",
+        totalReturnPct !== null ? pct(totalReturnPct) : "—",
+        pnlClass(totalReturnPct, s.taiwanColors)
+      );
+    } else {
+      this.card(cards, "總績效（成立以來）", "—（僅適用於全部期間）", "");
+    }
+
+    // ── 持倉表（快照，不受時間範圍影響） ──
+    container.createEl("h5", {
+      text: `目前持倉（以最新報價計，不受上方期間影響；共 ${positions.length} 檔）`,
+    });
     if (positions.length === 0) {
       container.createDiv({
         cls: "inv-dash-empty",
@@ -168,11 +241,11 @@ export class DashboardView extends ItemView {
       this.positionsTable(container, positions, s.taiwanColors);
     }
 
-    // ── 已實現月度表 ──
-    const monthly = summarizeRealized(store.fifo.realized, "month");
-    container.createEl("h5", { text: "已實現損益（月）" });
+    // ── 已實現月度表（受範圍約束，只列範圍內月份） ──
+    const monthly = summarizeRealized(periodRealized, "month");
+    container.createEl("h5", { text: `已實現損益月彙總（${rangeLabel}）` });
     if (monthly.length === 0) {
-      container.createDiv({ cls: "inv-dash-empty", text: "尚無已實現損益。" });
+      container.createDiv({ cls: "inv-dash-empty", text: "此期間尚無已實現損益。" });
     } else {
       const table = container.createEl("table", { cls: "inv-dash-table" });
       const thead = table.createEl("thead").createEl("tr");
@@ -190,6 +263,15 @@ export class DashboardView extends ItemView {
           cls: pnlClass(row.returnPct, s.taiwanColors),
         });
       }
+    }
+
+    // ── 個股別已實現明細（受範圍約束） ──
+    const byTicker = summarizeRealizedByTicker(periodRealized);
+    container.createEl("h5", { text: `個股別已實現明細（${rangeLabel}）` });
+    if (byTicker.length === 0) {
+      container.createDiv({ cls: "inv-dash-empty", text: "此期間尚無已實現損益。" });
+    } else {
+      this.byTickerTable(container, byTicker, s.taiwanColors);
     }
 
     // ── 警告區 ──
@@ -212,10 +294,19 @@ export class DashboardView extends ItemView {
     }
   }
 
-  private card(parent: HTMLElement, label: string, value: string, cls: string): void {
+  private card(
+    parent: HTMLElement,
+    label: string,
+    value: string,
+    cls: string,
+    sub?: string
+  ): void {
     const card = parent.createDiv({ cls: "inv-dash-card" });
     card.createDiv({ cls: "inv-dash-card-label", text: label });
     card.createDiv({ cls: `inv-dash-card-value ${cls}`.trim(), text: value });
+    if (sub !== undefined) {
+      card.createDiv({ cls: `inv-dash-card-sub ${cls}`.trim(), text: sub });
+    }
   }
 
   private positionsTable(
@@ -246,6 +337,51 @@ export class DashboardView extends ItemView {
         text: p.unrealizedPct !== null ? pct(p.unrealizedPct) : "—",
         cls: pnlClass(p.unrealizedPct, taiwanColors),
       });
+    }
+  }
+
+  /**
+   * 個股別已實現損益明細。個股欄若能在 vault 中找到對應的 type:stock 筆記
+   * （依 ticker 反查，不硬拼檔名），做成可點擊連結；找不到則顯示純文字。
+   */
+  private byTickerTable(
+    parent: HTMLElement,
+    rows: RealizedByTickerRow[],
+    taiwanColors: boolean
+  ): void {
+    const notes = listVaultNotes(this.app);
+    const wrapper = parent.createDiv({ cls: "inv-dash-table-wrap" });
+    const table = wrapper.createEl("table", { cls: "inv-dash-table" });
+    const thead = table.createEl("thead").createEl("tr");
+    for (const h of ["個股", "賣出筆數", "已實現損益", "報酬率", "勝率", "平均持有天數"]) {
+      thead.createEl("th", { text: h });
+    }
+    const tbody = table.createEl("tbody");
+    for (const r of rows) {
+      const tr = tbody.createEl("tr");
+      const tickerTd = tr.createEl("td");
+      const label = `${r.ticker}${r.name !== r.ticker ? " " + r.name : ""}`;
+      const notePath = findStockNoteByTicker(notes, r.ticker);
+      if (notePath !== null) {
+        const link = tickerTd.createEl("a", { cls: "internal-link", text: label });
+        link.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          void this.app.workspace.openLinkText(notePath, "");
+        });
+      } else {
+        tickerTd.setText(label);
+      }
+      tr.createEl("td", { text: fmtInt.format(r.sellCount) });
+      tr.createEl("td", {
+        text: signed(r.pnl),
+        cls: pnlClass(r.pnl, taiwanColors),
+      });
+      tr.createEl("td", {
+        text: r.returnPct !== null ? pct(r.returnPct) : "—",
+        cls: pnlClass(r.returnPct, taiwanColors),
+      });
+      tr.createEl("td", { text: `${r.winRate.toFixed(0)}%` });
+      tr.createEl("td", { text: `${r.avgHoldingDays.toFixed(1)} 天` });
     }
   }
 }

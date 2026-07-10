@@ -77,6 +77,12 @@ export interface RealizedEvent {
   /** 被消耗 lot 的成本合計（含攤入買進手續費） */
   costBasis: number;
   pnl: number;
+  /**
+   * 加權平均持有天數：Σ 消耗股數 ×(賣出日−lot 買進日) ÷ 總消耗股數。
+   * 一次賣出可能跨多批 lot（不同買進日），故用消耗股數加權而非簡單平均。
+   * 不做年化——短期持有的年化外推會產生誤導性極端值（見 v1.1 決策備忘）。
+   */
+  avgHoldingDays: number;
   sourcePath: string;
 }
 
@@ -114,4 +120,19 @@ export interface RealizedSummaryRow {
   costBasis: number;
   /** 期內已實現損益 ÷ 期內平倉成本 */
   returnPct: number | null;
+}
+
+/** 個股別已實現損益彙總列（儀表板用，受時間範圍約束；依 pnl 降冪排序） */
+export interface RealizedByTickerRow {
+  ticker: string;
+  name: string;
+  sellCount: number;
+  pnl: number;
+  costBasis: number;
+  /** pnl ÷ costBasis；costBasis 為 0 時為 null */
+  returnPct: number | null;
+  /** pnl > 0 的賣出事件數 ÷ 賣出筆數（%） */
+  winRate: number;
+  /** 依各筆賣出的消耗股數加權平均（見 RealizedEvent.avgHoldingDays） */
+  avgHoldingDays: number;
 }

@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type InvRecordPlugin from "./main";
+import type { DashboardRangeKey } from "./trades/portfolio";
 import type { KlineRange } from "./types";
 
 export interface InvRecordSettings {
@@ -13,6 +14,8 @@ export interface InvRecordSettings {
   macroFolder: string;
   /** 自選股（儀表板顯示報價；持倉股票自動包含） */
   watchlist: string[];
+  /** 儀表板已實現損益的時間範圍選擇（記住使用者上次選擇） */
+  dashboardRange: DashboardRangeKey;
   defaultRange: KlineRange;
   cacheTtlMinutes: number;
   /** true = 台式紅漲綠跌；false = 美式綠漲紅跌 */
@@ -28,6 +31,7 @@ export const DEFAULT_SETTINGS: InvRecordSettings = {
   themeFolder: "20-題材",
   macroFolder: "10-總經",
   watchlist: [],
+  dashboardRange: "thisYear",
   defaultRange: "1y",
   cacheTtlMinutes: 15,
   taiwanColors: true,

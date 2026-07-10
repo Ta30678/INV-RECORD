@@ -15,7 +15,13 @@ import type {
  * - 賣出：從最舊 lot 開始消耗；pnl = (price*qty − fee − tax) − Σ 消耗 lot 成本
  * - 超賣不做空：只實現持股可覆蓋的部分，其餘記 issue
  * - 當沖稅率減半不在 v1 範圍
+ * - 每筆賣出另計加權平均持有天數（供儀表板個股別明細用），不做年化
  */
+
+/** 'YYYY-MM-DD' → UTC epoch day（整數）。日期字串為 ISO 純日期形式，Date.parse 視為 UTC 午夜。 */
+function epochDay(date: string): number {
+  return Math.floor(Date.parse(date) / 86_400_000);
+}
 export function sortTrades(trades: TradeRecord[]): TradeRecord[] {
   return [...trades].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -71,12 +77,15 @@ export function computeFifo(trades: TradeRecord[]): FifoResult {
 
     // 賣出費稅按實際實現股數比例分攤（超賣時只攤可覆蓋部分）
     const feeTaxPerShare = (t.fee + t.tax) / t.qty;
+    const sellEpochDay = epochDay(t.date);
     let remaining = sellQty;
     let costBasis = 0;
+    let weightedHoldingDays = 0;
     while (remaining > 0 && lots.length > 0) {
       const lot = lots[0];
       const take = Math.min(lot.qty, remaining);
       costBasis += take * lot.costPerShare;
+      weightedHoldingDays += take * (sellEpochDay - epochDay(lot.date));
       lot.qty -= take;
       remaining -= take;
       if (lot.qty === 0) lots.shift();
@@ -92,6 +101,7 @@ export function computeFifo(trades: TradeRecord[]): FifoResult {
       proceeds,
       costBasis,
       pnl: proceeds - costBasis,
+      avgHoldingDays: sellQty > 0 ? weightedHoldingDays / sellQty : 0,
       sourcePath: t.filePath,
     });
     openLots.set(t.ticker, lots);

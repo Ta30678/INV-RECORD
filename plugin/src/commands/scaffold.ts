@@ -13,8 +13,8 @@ import {
 import { taiwanNowString, taiwanToday } from "../utils/time";
 import { normalizeTicker } from "../yahoo/parse";
 
-/** 讀出 vault 內所有筆記的路徑與 frontmatter，供雙向鏈結反查用。 */
-function listVaultNotes(app: App): VaultNoteRef[] {
+/** 讀出 vault 內所有筆記的路徑與 frontmatter，供雙向鏈結反查用（儀表板個股別明細表的連結反查也共用此函式）。 */
+export function listVaultNotes(app: App): VaultNoteRef[] {
   return app.vault.getMarkdownFiles().map((f) => ({
     path: f.path,
     frontmatter: app.metadataCache.getFileCache(f)?.frontmatter as

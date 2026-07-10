@@ -105,6 +105,30 @@
   margin: 2px 0 4px;
 }
 
+.inv-dash-range {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 6px 0 2px;
+}
+
+.inv-dash-range-btn {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 10px;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.inv-dash-range-btn.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
 .inv-dash-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
@@ -127,6 +151,12 @@
   font-size: var(--font-ui-medium);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.inv-dash-card-sub {
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 
 .inv-dashboard h5 {

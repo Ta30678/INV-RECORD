@@ -121,6 +121,38 @@ describe("computeFifo", () => {
   });
 });
 
+describe("avgHoldingDays（加權平均持有天數）", () => {
+  it("單批買單批賣：等於買賣日曆天差", () => {
+    const r = computeFifo([
+      trade({ date: "2026-01-01", action: "buy", qty: 1000, price: 100 }),
+      trade({ date: "2026-01-11", action: "sell", qty: 1000, price: 110 }),
+    ]);
+    expect(r.realized[0].avgHoldingDays).toBeCloseTo(10);
+  });
+
+  it("一次賣出跨兩批不同買進日的 lot：依消耗股數加權平均", () => {
+    const r = computeFifo([
+      // lot1: 2026-01-01 買 1000 股，持有到賣出日 2026-01-31 → 30 天
+      trade({ date: "2026-01-01", action: "buy", qty: 1000, price: 100 }),
+      // lot2: 2026-01-21 買 1000 股，持有到賣出日 2026-01-31 → 10 天
+      trade({ date: "2026-01-21", action: "buy", qty: 1000, price: 120 }),
+      // 賣 1500 股：消耗 lot1 全部 1000 股 + lot2 500 股
+      trade({ date: "2026-01-31", action: "sell", qty: 1500, price: 130 }),
+    ]);
+    expect(r.realized).toHaveLength(1);
+    // (1000*30 + 500*10) / 1500 = (30000+5000)/1500 = 23.333...
+    expect(r.realized[0].avgHoldingDays).toBeCloseTo((1000 * 30 + 500 * 10) / 1500);
+  });
+
+  it("同日買同日賣：持有天數為 0", () => {
+    const r = computeFifo([
+      trade({ date: "2026-01-05", time: "09:00", action: "buy", qty: 1000, price: 100 }),
+      trade({ date: "2026-01-05", time: "13:00", action: "sell", qty: 1000, price: 101 }),
+    ]);
+    expect(r.realized[0].avgHoldingDays).toBe(0);
+  });
+});
+
 describe("sortTrades", () => {
   it("date → seq → filePath 排序（皆無 time 時與現制相同，向下相容）", () => {
     const sorted = sortTrades([
