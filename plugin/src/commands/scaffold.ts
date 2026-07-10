@@ -1,7 +1,26 @@
 import { App, Modal, Notice, Setting, TFile, normalizePath } from "obsidian";
 import type InvRecordPlugin from "../main";
 import { estimateFee, estimateTax, type FeeSettings } from "../trades/fees";
+import {
+  buildUpFieldValue,
+  findNoteByTypeAndBasename,
+  findStockNoteByTicker,
+  findThemeNoteByName,
+  parseThemeNames,
+  wikilinkFromPath,
+  type VaultNoteRef,
+} from "../trades/noteLinks";
 import { normalizeTicker } from "../yahoo/parse";
+
+/** 讀出 vault 內所有筆記的路徑與 frontmatter，供雙向鏈結反查用。 */
+function listVaultNotes(app: App): VaultNoteRef[] {
+  return app.vault.getMarkdownFiles().map((f) => ({
+    path: f.path,
+    frontmatter: app.metadataCache.getFileCache(f)?.frontmatter as
+      | Record<string, unknown>
+      | undefined,
+  }));
+}
 
 /** 依序尋找不衝突的檔名（同日多筆自動加序號） */
 async function availablePath(
@@ -35,6 +54,7 @@ export class NewTradeModal extends Modal {
   private date = new Date().toISOString().slice(0, 10);
   private ticker = "";
   private name = "";
+  private themeName = "";
   private action: "buy" | "sell" = "buy";
   private qty = 1000;
   private price = 0;
@@ -92,6 +112,13 @@ export class NewTradeModal extends Modal {
     new Setting(contentEl).setName("名稱").addText((t) =>
       t.setPlaceholder("台積電").onChange((v) => (this.name = v.trim()))
     );
+
+    new Setting(contentEl)
+      .setName("題材")
+      .setDesc("選填，連到題材筆記；留空則不寫入 theme:")
+      .addText((t) =>
+        t.setPlaceholder("AI 半導體").onChange((v) => (this.themeName = v.trim()))
+      );
 
     new Setting(contentEl).setName("買 / 賣").addDropdown((d) =>
       d
@@ -179,7 +206,27 @@ export class NewTradeModal extends Modal {
     );
 
     const displayName = this.name || this.ticker;
-    const stockLink = `[[${displayName} ${this.ticker}]]`;
+
+    // stock:/theme: 一律反查既有筆記，找不到就留空，避免猜錯檔名產生 dangling link
+    // 或 [[代號 代號]] 這種重複 token（見雙向鏈結決策備忘）。
+    const notes = listVaultNotes(this.app);
+    const stockPath = findStockNoteByTicker(notes, this.ticker);
+    const stockLink = stockPath ? wikilinkFromPath(stockPath) : "";
+    if (!stockPath) {
+      new Notice(`尚無 ${this.ticker} 的個股筆記，stock 連結先留空，建議先用「新增個股筆記」建立`);
+    }
+
+    let themeLink = "";
+    if (this.themeName) {
+      const themePath = findThemeNoteByName(notes, this.themeName);
+      if (themePath) {
+        themeLink = wikilinkFromPath(themePath);
+      } else {
+        themeLink = `[[${this.themeName}]]`;
+        new Notice(`尚無「${this.themeName}」的題材筆記，建議先用「新增題材筆記」建立`);
+      }
+    }
+
     const content = `---
 type: trade
 date: ${this.date}
@@ -192,7 +239,7 @@ price: ${this.price}
 fee: ${this.fee}
 tax: ${this.tax}
 stock: "${stockLink}"
-theme: ""
+theme: "${themeLink}"
 ---
 
 ## ${actionLabel}原因
@@ -212,6 +259,7 @@ theme: ""
 export class NewStockNoteModal extends Modal {
   private ticker = "";
   private name = "";
+  private themeNames = "";
 
   constructor(
     app: App,
@@ -229,6 +277,14 @@ export class NewStockNoteModal extends Modal {
     new Setting(contentEl).setName("名稱").addText((t) =>
       t.setPlaceholder("台積電").onChange((v) => (this.name = v.trim()))
     );
+    new Setting(contentEl)
+      .setName("題材")
+      .setDesc("選填，一檔個股可橫跨多題材，逗號分隔；留空則不寫入 up:")
+      .addText((t) =>
+        t
+          .setPlaceholder("AI 半導體, 先進封裝")
+          .onChange((v) => (this.themeNames = v))
+      );
     new Setting(contentEl).addButton((b) =>
       b
         .setButtonText("建立")
@@ -254,11 +310,22 @@ export class NewStockNoteModal extends Modal {
       new Notice("這檔股票的筆記已存在");
       return;
     }
+
+    // up: 支援多題材（一檔個股可橫跨多題材），只認既有題材筆記的檔名；
+    // 找不到的題材仍會寫入連結，但另外提醒使用者建立，避免建檔流程被卡住。
+    const themeNames = parseThemeNames(this.themeNames);
+    const notes = listVaultNotes(this.app);
+    const missing = themeNames.filter((n) => !findThemeNoteByName(notes, n));
+    if (missing.length > 0) {
+      new Notice(`尚無題材筆記：${missing.join("、")}，建議先用「新增題材筆記」建立`);
+    }
+    const upValue = buildUpFieldValue(themeNames);
+
     const content = `---
 type: stock
 ticker: "${this.ticker}"
 name: ${displayName}
-up: ""
+up: ${upValue}
 tags: [個股]
 ---
 
@@ -274,6 +341,12 @@ period: D
 -
 
 ## 基本面檢視
+
+-
+
+## 關鍵交易復盤
+
+> 精選復盤，完整清單見右側反向連結（Backlinks）。只記會改變論點的少數幾筆，附一行教訓。
 
 -
 
@@ -345,6 +418,91 @@ tags: [總經]
 -
 
 ## 對我持股的影響
+
+-
+`;
+    await createAndOpen(this.app, path, content);
+    this.close();
+  }
+}
+
+/** 建立題材筆記（總經 → 題材 → 個股 三層筆記法的中間層） */
+export class NewThemeNoteModal extends Modal {
+  private title = "";
+  private macroName = "";
+
+  constructor(
+    app: App,
+    private plugin: InvRecordPlugin
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("新增題材筆記");
+    const { contentEl } = this;
+    new Setting(contentEl)
+      .setName("標題")
+      .setDesc("例如：AI 半導體")
+      .addText((t) => t.onChange((v) => (this.title = v.trim())));
+    new Setting(contentEl)
+      .setName("總經筆記")
+      .setDesc("選填，連到相關的總經筆記；留空則不寫入 up:")
+      .addText((t) =>
+        t
+          .setPlaceholder("2026-07 FED 利率決策")
+          .onChange((v) => (this.macroName = v.trim()))
+      );
+    new Setting(contentEl).addButton((b) =>
+      b
+        .setButtonText("建立")
+        .setCta()
+        .onClick(() => void this.create())
+    );
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+
+  private async create(): Promise<void> {
+    if (!this.title) {
+      new Notice("請填標題");
+      return;
+    }
+    const s = this.plugin.settings;
+    await ensureFolder(this.app, s.themeFolder);
+    const path = normalizePath(`${s.themeFolder}/${this.title}.md`);
+    if (this.app.vault.getAbstractFileByPath(path)) {
+      new Notice("同名筆記已存在");
+      return;
+    }
+
+    let upLink = "";
+    if (this.macroName) {
+      const notes = listVaultNotes(this.app);
+      const macroPath = findNoteByTypeAndBasename(notes, "macro", this.macroName);
+      if (macroPath) {
+        upLink = wikilinkFromPath(macroPath);
+      } else {
+        upLink = `[[${this.macroName}]]`;
+        new Notice(`尚無「${this.macroName}」的總經筆記，建議先用「新增總經筆記」建立`);
+      }
+    }
+
+    const content = `---
+type: theme
+up: "${upLink}"
+tags: [題材]
+---
+
+> 相關個股請見右側反向連結（Backlinks）面板或 Local Graph，不需手動維護清單。
+
+## 題材邏輯
+
+-
+
+## 風險
 
 -
 `;

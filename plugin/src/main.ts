@@ -4,6 +4,7 @@ import { registerKlineProcessor } from "./kline/processor";
 import {
   NewMacroNoteModal,
   NewStockNoteModal,
+  NewThemeNoteModal,
   NewTradeModal,
 } from "./commands/scaffold";
 import {
@@ -64,6 +65,11 @@ export default class InvRecordPlugin extends Plugin {
       id: "new-macro-note",
       name: "新增總經筆記",
       callback: () => new NewMacroNoteModal(this.app, this).open(),
+    });
+    this.addCommand({
+      id: "new-theme-note",
+      name: "新增題材筆記",
+      callback: () => new NewThemeNoteModal(this.app, this).open(),
     });
     this.addCommand({
       id: "refresh-quotes",

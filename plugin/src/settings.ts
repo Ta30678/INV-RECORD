@@ -7,6 +7,8 @@ export interface InvRecordSettings {
   tradesFolder: string;
   /** 個股筆記資料夾（scaffold 用） */
   stocksFolder: string;
+  /** 題材筆記資料夾（scaffold 用） */
+  themeFolder: string;
   /** 總經筆記資料夾（scaffold 用） */
   macroFolder: string;
   /** 自選股（儀表板顯示報價；持倉股票自動包含） */
@@ -23,6 +25,7 @@ export interface InvRecordSettings {
 export const DEFAULT_SETTINGS: InvRecordSettings = {
   tradesFolder: "40-交易紀錄",
   stocksFolder: "30-個股",
+  themeFolder: "20-題材",
   macroFolder: "10-總經",
   watchlist: [],
   defaultRange: "1y",
@@ -78,6 +81,17 @@ export class InvRecordSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.stocksFolder)
           .onChange(async (v) => {
             this.plugin.settings.stocksFolder = v.trim() || DEFAULT_SETTINGS.stocksFolder;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("題材筆記資料夾")
+      .addText((t) =>
+        t
+          .setValue(this.plugin.settings.themeFolder)
+          .onChange(async (v) => {
+            this.plugin.settings.themeFolder = v.trim() || DEFAULT_SETTINGS.themeFolder;
             await this.plugin.saveSettings();
           })
       );

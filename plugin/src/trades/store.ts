@@ -1,7 +1,15 @@
-import { Component, TAbstractFile, TFile, type App, type EventRef } from "obsidian";
+import {
+  Component,
+  TAbstractFile,
+  TFile,
+  type App,
+  type EventRef,
+  type FrontmatterLinkCache,
+} from "obsidian";
 import type InvRecordPlugin from "../main";
 import type { FifoResult, ParseIssue, TradeRecord } from "../types";
 import { computeFifo } from "./fifo";
+import { checkStockLinkConsistency } from "./noteLinks";
 import { parseTradeFrontmatter } from "./parser";
 
 /**
@@ -81,18 +89,52 @@ export class TradeStore extends Component {
     const issues: ParseIssue[] = [];
     for (const file of this.app.vault.getMarkdownFiles()) {
       if (!this.isRelevantPath(file.path)) continue;
-      const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      const cache = this.app.metadataCache.getFileCache(file);
       const result = parseTradeFrontmatter(
-        frontmatter as Record<string, unknown> | undefined,
+        cache?.frontmatter as Record<string, unknown> | undefined,
         file.path
       );
-      if (result.trade) trades.push(result.trade);
+      if (result.trade) {
+        trades.push(result.trade);
+        const linkIssue = this.checkStockLink(file, result.trade, cache?.frontmatterLinks);
+        if (linkIssue) issues.push(linkIssue);
+      }
       issues.push(...result.issues);
     }
     this.trades = trades;
     this.parseIssues = issues;
     this.fifo = computeFifo(trades);
     for (const fn of this.listeners) fn();
+  }
+
+  /**
+   * 唯讀一致性檢查：交易的 stock: 連結若能解析到個股筆記，
+   * 且該筆記 frontmatter.ticker 與本筆交易 ticker 不一致，回報一條 issue。
+   * 不修改任何筆記，只是把「隱性漂移」變「可見警告」（見鏈結決策備忘）。
+   */
+  private checkStockLink(
+    file: TFile,
+    trade: TradeRecord,
+    frontmatterLinks: FrontmatterLinkCache[] | undefined
+  ): ParseIssue | null {
+    const stockLink = frontmatterLinks?.find((l) => l.key === "stock");
+    if (!stockLink) return null;
+    const target = this.app.metadataCache.getFirstLinkpathDest(
+      stockLink.link,
+      file.path
+    );
+    if (!target) return null; // 連結解析不到筆記（尚未建立），不在此檢查範圍
+    const targetFrontmatter = this.app.metadataCache.getFileCache(target)?.frontmatter as
+      | Record<string, unknown>
+      | undefined;
+    const rawTicker = targetFrontmatter?.ticker;
+    if (rawTicker === undefined || rawTicker === null) return null;
+    return checkStockLinkConsistency(
+      file.path,
+      trade.ticker,
+      String(rawTicker),
+      target.path
+    );
   }
 
   /** 持倉 + 自選股的所有代號（報價用） */
