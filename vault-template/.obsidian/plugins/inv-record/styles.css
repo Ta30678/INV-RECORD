@@ -1,0 +1,167 @@
+/* ── K 線圖 ── */
+.inv-kline {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: 8px 10px 10px;
+  margin: 8px 0;
+}
+
+.inv-kline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.inv-kline-title {
+  font-weight: 600;
+  font-size: var(--font-ui-small);
+}
+
+.inv-kline-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.inv-kline-period,
+.inv-kline-refresh {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 8px;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.inv-kline-period.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.inv-kline-status {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  min-height: 0;
+}
+
+.inv-kline-status:empty {
+  display: none;
+}
+
+.inv-kline-error {
+  color: var(--text-error);
+}
+
+.inv-kline-chart {
+  height: 320px;
+  width: 100%;
+}
+
+/* ── 績效儀表板 ── */
+.inv-dashboard {
+  padding: 8px 12px;
+  overflow-y: auto;
+}
+
+.inv-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inv-dash-header h4 {
+  margin: 4px 0;
+}
+
+.inv-dash-refresh {
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+
+.inv-dash-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.inv-dash-card {
+  background: var(--background-secondary);
+  border-radius: var(--radius-m);
+  padding: 8px 10px;
+}
+
+.inv-dash-card-label {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.inv-dash-card-value {
+  font-size: var(--font-ui-medium);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-dashboard h5 {
+  margin: 14px 0 6px;
+  color: var(--text-muted);
+}
+
+.inv-dash-empty {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+}
+
+.inv-dash-table-wrap {
+  overflow-x: auto;
+}
+
+.inv-dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-dash-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 3px 6px;
+}
+
+.inv-dash-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+  white-space: nowrap;
+}
+
+/* 台式紅漲綠跌（class 由程式依設定決定，這裡只管顏色） */
+.inv-up {
+  color: #d6453f;
+}
+
+.inv-down {
+  color: #1f9d55;
+}
+
+.inv-dash-warnings {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  border-left: 3px solid var(--color-yellow);
+  font-size: var(--font-ui-smaller);
+}
+
+.inv-dash-warnings ul {
+  margin: 4px 0 0;
+  padding-inline-start: 18px;
+}

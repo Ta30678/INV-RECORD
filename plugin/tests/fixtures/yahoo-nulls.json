@@ -1,0 +1,27 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "TWD",
+          "symbol": "3661.TW",
+          "regularMarketPrice": 2500.0,
+          "chartPreviousClose": 2480.0
+        },
+        "timestamp": [1782694800, 1782781200, 1782853200],
+        "indicators": {
+          "quote": [
+            {
+              "open": [2400.0, null, 2460.0],
+              "high": [2450.0, null, 2510.0],
+              "low": [2390.0, null, 2455.0],
+              "close": [2440.0, null, 2500.0],
+              "volume": [500000, null, null]
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}

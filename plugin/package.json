@@ -1,0 +1,28 @@
+{
+  "name": "inv-record",
+  "version": "0.1.0",
+  "description": "台股投資追蹤 Obsidian 外掛：K 線圖、交易紀錄與損益儀表板",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "test": "vitest run",
+    "install:vault": "node scripts/install-to-vault.mjs",
+    "check:yahoo": "node scripts/live-yahoo-check.mjs"
+  },
+  "keywords": ["obsidian", "taiwan-stock", "investment"],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.28.1",
+    "obsidian": "^1.13.1",
+    "typescript": "^5.6.0",
+    "undici": "^7.0.0",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "lightweight-charts": "^5.2.0"
+  }
+}

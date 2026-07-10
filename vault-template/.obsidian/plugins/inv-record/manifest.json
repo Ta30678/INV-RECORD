@@ -1,0 +1,9 @@
+{
+  "id": "inv-record",
+  "name": "INV Record 投資紀錄",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "台股投資追蹤：K 線圖（日/週/月）、交易紀錄與 FIFO 損益儀表板。",
+  "author": "INV RECORD",
+  "isDesktopOnly": false
+}

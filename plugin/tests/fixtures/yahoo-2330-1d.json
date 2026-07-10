@@ -1,0 +1,30 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "TWD",
+          "symbol": "2330.TW",
+          "exchangeName": "TAI",
+          "instrumentType": "EQUITY",
+          "regularMarketPrice": 985.0,
+          "chartPreviousClose": 975.0,
+          "shortName": "TAIWAN SEMICONDUCTOR MANUFACTURING CO"
+        },
+        "timestamp": [1782694800, 1782781200, 1782867600],
+        "indicators": {
+          "quote": [
+            {
+              "open": [960.0, 968.0, 978.0],
+              "high": [970.0, 980.0, 990.0],
+              "low": [955.0, 965.0, 975.0],
+              "close": [968.0, 975.0, 985.0],
+              "volume": [21000000, 25000000, 30000000]
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}
