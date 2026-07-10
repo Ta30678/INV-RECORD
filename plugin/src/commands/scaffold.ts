@@ -10,6 +10,7 @@ import {
   wikilinkFromPath,
   type VaultNoteRef,
 } from "../trades/noteLinks";
+import { taiwanNowString, taiwanToday } from "../utils/time";
 import { normalizeTicker } from "../yahoo/parse";
 
 /** 讀出 vault 內所有筆記的路徑與 frontmatter，供雙向鏈結反查用。 */
@@ -51,7 +52,8 @@ async function createAndOpen(app: App, path: string, content: string): Promise<v
 
 /** 新增交易紀錄的輸入 Modal：自動試算手續費與證交稅。 */
 export class NewTradeModal extends Modal {
-  private date = new Date().toISOString().slice(0, 10);
+  private date = taiwanToday();
+  private time = "";
   private ticker = "";
   private name = "";
   private themeName = "";
@@ -101,6 +103,13 @@ export class NewTradeModal extends Modal {
     new Setting(contentEl).setName("日期").addText((t) =>
       t.setValue(this.date).onChange((v) => (this.date = v.trim()))
     );
+
+    new Setting(contentEl)
+      .setName("成交時間")
+      .setDesc("選填，24 小時制 HH:mm；同日多筆交易的先後順序以此為準（優於建檔序號）")
+      .addText((t) =>
+        t.setPlaceholder("09:05").onChange((v) => (this.time = v.trim()))
+      );
 
     new Setting(contentEl)
       .setName("代號")
@@ -187,6 +196,10 @@ export class NewTradeModal extends Modal {
       new Notice("日期格式須為 YYYY-MM-DD");
       return;
     }
+    if (this.time && !/^\d{2}:\d{2}$/.test(this.time)) {
+      new Notice("成交時間格式須為 HH:mm（24 小時制），或留空");
+      return;
+    }
     if (!this.ticker) {
       new Notice("請填股票代號");
       return;
@@ -230,6 +243,7 @@ export class NewTradeModal extends Modal {
     const content = `---
 type: trade
 date: ${this.date}
+time: "${this.time}"
 seq: ${seq}
 ticker: "${this.ticker}"
 name: ${displayName}
@@ -240,6 +254,8 @@ fee: ${this.fee}
 tax: ${this.tax}
 stock: "${stockLink}"
 theme: "${themeLink}"
+created: "${taiwanNowString()}"
+updated: ""
 ---
 
 ## ${actionLabel}原因
@@ -325,6 +341,8 @@ export class NewStockNoteModal extends Modal {
 type: stock
 ticker: "${this.ticker}"
 name: ${displayName}
+created: "${taiwanNowString()}"
+updated: ""
 up: ${upValue}
 tags: [個股]
 ---
@@ -401,10 +419,12 @@ export class NewMacroNoteModal extends Modal {
       new Notice("同名筆記已存在");
       return;
     }
-    const date = new Date().toISOString().slice(0, 10);
+    const date = taiwanToday();
     const content = `---
 type: macro
 date: ${date}
+created: "${taiwanNowString()}"
+updated: ""
 up: "[[總經 MOC]]"
 tags: [總經]
 ---
@@ -492,6 +512,8 @@ export class NewThemeNoteModal extends Modal {
 
     const content = `---
 type: theme
+created: "${taiwanNowString()}"
+updated: ""
 up: "${upLink}"
 tags: [題材]
 ---

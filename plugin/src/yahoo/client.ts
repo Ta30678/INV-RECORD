@@ -38,15 +38,17 @@ export class YahooClient {
   /**
    * 取得 K 線與報價。快取未過期直接回傳；過期重抓，
    * 抓取失敗但有舊快取時回傳舊資料（stale=true）。
+   * fetchedAt（epoch ms）一律回傳，供 UI 顯示「資料截至／抓取於」等時間戳
+   * （見 utils/time.ts 的格式化函式），讓使用者判斷手上資料有多新。
    */
   async getChart(
     ticker: string,
     opts: FetchChartOptions
-  ): Promise<{ data: ChartData; stale: boolean }> {
+  ): Promise<{ data: ChartData; stale: boolean; fetchedAt: number }> {
     const key = `${ticker}|${opts.interval}|${opts.range}`;
     const cached = this.cache.get(key);
     if (cached && this.now() - cached.fetchedAt < this.ttlMs) {
-      return { data: cached.data, stale: false };
+      return { data: cached.data, stale: false, fetchedAt: cached.fetchedAt };
     }
 
     let promise = this.inflight.get(key);
@@ -67,18 +69,22 @@ export class YahooClient {
 
     try {
       const data = await promise;
-      return { data, stale: false };
+      // promise 內部剛 set 過快取，這裡重新讀出來取得本次寫入的 fetchedAt
+      const entry = this.cache.get(key);
+      return { data, stale: false, fetchedAt: entry?.fetchedAt ?? this.now() };
     } catch (e) {
       if (cached) {
-        return { data: cached.data, stale: true };
+        return { data: cached.data, stale: true, fetchedAt: cached.fetchedAt };
       }
       throw e;
     }
   }
 
   /** 即時報價（給儀表板未實現損益）：用日K短 range，共用同一快取。 */
-  async getQuote(ticker: string): Promise<{ price: number | null; stale: boolean }> {
-    const { data, stale } = await this.getChart(ticker, {
+  async getQuote(
+    ticker: string
+  ): Promise<{ price: number | null; stale: boolean; fetchedAt: number }> {
+    const { data, stale, fetchedAt } = await this.getChart(ticker, {
       interval: "1d",
       range: "5d",
     });
@@ -86,7 +92,7 @@ export class YahooClient {
       data.meta.regularMarketPrice ??
       data.bars[data.bars.length - 1]?.close ??
       null;
-    return { price, stale };
+    return { price, stale, fetchedAt };
   }
 
   clearCache(): void {

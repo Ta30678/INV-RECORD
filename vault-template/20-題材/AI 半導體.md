@@ -1,5 +1,7 @@
 ---
 type: theme
+created: "2026-04-15 09:00"
+updated: ""
 up: "[[2026-07 FED 利率決策]]"
 tags: [題材]
 ---

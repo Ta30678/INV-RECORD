@@ -6,6 +6,11 @@ import {
   summarizeRealized,
 } from "../trades/portfolio";
 import type { Position } from "../types";
+import {
+  formatTaiwanDateTime,
+  formatTaiwanDateTimeShort,
+  taiwanToday,
+} from "../utils/time";
 
 export const DASHBOARD_VIEW_TYPE = "inv-record-dashboard";
 
@@ -38,6 +43,10 @@ export class DashboardView extends ItemView {
   private quotes = new Map<string, number>();
   private quoteStale = false;
   private quoteError: string | null = null;
+  /** 本輪抓取完成的本機時間（epoch ms）；未實現損益等即時數字要有時間戳才可信。 */
+  private lastRefreshAt: number | null = null;
+  /** stale 報價中最舊的抓取時間；讓使用者判斷快取警告的嚴重程度。 */
+  private oldestStaleFetchedAt: number | null = null;
   private unsubscribe: (() => void) | null = null;
 
   constructor(
@@ -76,6 +85,7 @@ export class DashboardView extends ItemView {
     const tickers = this.plugin.tradeStore.tickersToQuote();
     this.quoteError = null;
     this.quoteStale = false;
+    this.oldestStaleFetchedAt = null;
     const results = await Promise.allSettled(
       tickers.map(async (t) => {
         const q = await this.plugin.yahoo.getQuote(t);
@@ -86,7 +96,15 @@ export class DashboardView extends ItemView {
     for (const r of results) {
       if (r.status === "fulfilled") {
         if (r.value.price !== null) this.quotes.set(r.value.ticker, r.value.price);
-        if (r.value.stale) this.quoteStale = true;
+        if (r.value.stale) {
+          this.quoteStale = true;
+          if (
+            this.oldestStaleFetchedAt === null ||
+            r.value.fetchedAt < this.oldestStaleFetchedAt
+          ) {
+            this.oldestStaleFetchedAt = r.value.fetchedAt;
+          }
+        }
       } else {
         failures++;
       }
@@ -94,6 +112,7 @@ export class DashboardView extends ItemView {
     if (failures > 0) {
       this.quoteError = `有 ${failures} 檔股票報價取得失敗`;
     }
+    this.lastRefreshAt = Date.now();
     this.render();
   }
 
@@ -117,13 +136,20 @@ export class DashboardView extends ItemView {
       void this.refreshQuotes();
     });
 
+    if (this.lastRefreshAt !== null) {
+      container.createDiv({
+        cls: "inv-dash-meta",
+        text: `報價更新於 ${formatTaiwanDateTime(this.lastRefreshAt)}`,
+      });
+    }
+
     // ── 摘要卡 ──
     const totalValue = positions.reduce((sum, p) => sum + (p.marketValue ?? 0), 0);
     const totalUnrealized = positions.reduce(
       (sum, p) => sum + (p.unrealizedPnl ?? 0),
       0
     );
-    const today = new Date().toISOString().slice(0, 10);
+    const today = taiwanToday();
     const yearRealized = realizedThisYear(store.fifo.realized, today);
 
     const cards = container.createDiv({ cls: "inv-dash-cards" });
@@ -168,7 +194,13 @@ export class DashboardView extends ItemView {
 
     // ── 警告區 ──
     const warnings: string[] = [];
-    if (this.quoteStale) warnings.push("部分報價來自快取（Yahoo 連線失敗）");
+    if (this.quoteStale) {
+      const age =
+        this.oldestStaleFetchedAt !== null
+          ? `（最舊為 ${formatTaiwanDateTimeShort(this.oldestStaleFetchedAt)} 抓取）`
+          : "";
+      warnings.push(`部分報價來自快取${age}`);
+    }
     if (this.quoteError) warnings.push(this.quoteError);
     for (const i of store.parseIssues) warnings.push(`${i.filePath}：${i.message}`);
     for (const i of store.fifo.issues) warnings.push(`${i.filePath}：${i.message}`);

@@ -6,6 +6,7 @@ function trade(partial: Partial<TradeRecord>): TradeRecord {
   return {
     filePath: partial.filePath ?? "t.md",
     date: partial.date ?? "2026-01-01",
+    time: partial.time,
     seq: partial.seq ?? 0,
     ticker: partial.ticker ?? "2330",
     name: partial.name ?? "台積電",
@@ -121,7 +122,7 @@ describe("computeFifo", () => {
 });
 
 describe("sortTrades", () => {
-  it("date → seq → filePath 排序", () => {
+  it("date → seq → filePath 排序（皆無 time 時與現制相同，向下相容）", () => {
     const sorted = sortTrades([
       trade({ date: "2026-01-02", filePath: "b.md" }),
       trade({ date: "2026-01-02", filePath: "a.md" }),
@@ -134,5 +135,61 @@ describe("sortTrades", () => {
       "2026-01-02#0#a.md",
       "2026-01-02#0#b.md",
     ]);
+  });
+
+  it("同日 time 混排：有 time 者先於缺 time 者，且依 time 排序", () => {
+    const sorted = sortTrades([
+      trade({ date: "2026-01-05", time: "14:00", filePath: "c-no-time.md" }),
+      trade({ date: "2026-01-05", filePath: "no-time.md" }), // 缺 time → 視為 99:99
+      trade({ date: "2026-01-05", time: "09:30", filePath: "b.md" }),
+      trade({ date: "2026-01-05", time: "09:00", filePath: "a.md" }),
+    ]);
+    expect(sorted.map((t) => t.filePath)).toEqual([
+      "a.md",
+      "b.md",
+      "c-no-time.md",
+      "no-time.md",
+    ]);
+  });
+
+  it("time 排序優先於 seq：seq 補登順序不影響真實成交時間排序", () => {
+    // seq 暗示賣出（seq=1）比買進（seq=2）早建檔，但實際成交 time 買進較早
+    const sorted = sortTrades([
+      trade({ date: "2026-01-05", seq: 1, time: "10:00", action: "sell", filePath: "sell.md" }),
+      trade({ date: "2026-01-05", seq: 2, time: "09:00", action: "buy", filePath: "buy.md" }),
+    ]);
+    expect(sorted.map((t) => t.filePath)).toEqual(["buy.md", "sell.md"]);
+  });
+
+  it("同鍵（同日同 seq 皆無 time）買進先於賣出，不再依賴檔名字典序", () => {
+    // 檔名刻意讓賣出的字母序排在買進之前，驗證 tiebreak 是明確規則而非湊巧
+    const sorted = sortTrades([
+      trade({ date: "2026-01-05", action: "sell", filePath: "a-sell.md" }),
+      trade({ date: "2026-01-05", action: "buy", filePath: "z-buy.md" }),
+    ]);
+    expect(sorted.map((t) => t.action)).toEqual(["buy", "sell"]);
+  });
+});
+
+describe("computeFifo 與成交時間排序的交互作用", () => {
+  it("同日先買後賣（有 time）：FIFO 正確配對，不觸發賣超", () => {
+    const r = computeFifo([
+      // seq 顛倒但 time 正確反映買在賣之前
+      trade({ date: "2026-01-05", seq: 5, time: "09:00", action: "buy", qty: 1000, price: 100, filePath: "buy.md" }),
+      trade({ date: "2026-01-05", seq: 1, time: "13:00", action: "sell", qty: 1000, price: 110, filePath: "sell.md" }),
+    ]);
+    expect(r.issues).toHaveLength(0);
+    expect(r.realized).toHaveLength(1);
+    expect(r.realized[0].pnl).toBeCloseTo(10000);
+  });
+
+  it("賣出 time 早於當日買進 time：視為真實賣超並記 issue", () => {
+    const r = computeFifo([
+      trade({ date: "2026-01-05", time: "13:00", action: "buy", qty: 1000, price: 100, filePath: "buy.md" }),
+      trade({ date: "2026-01-05", time: "09:00", action: "sell", qty: 500, price: 110, filePath: "sell.md" }),
+    ]);
+    expect(r.issues).toHaveLength(1);
+    expect(r.issues[0].filePath).toBe("sell.md");
+    expect(r.realized).toHaveLength(0);
   });
 });

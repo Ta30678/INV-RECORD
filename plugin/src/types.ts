@@ -15,6 +15,8 @@ export interface QuoteMeta {
   previousClose: number | null;
   currency: string | null;
   shortName: string | null;
+  /** 最後成交/報價時間（unix 秒）；用來判斷盤中或收盤，取不到時為 null。 */
+  regularMarketTime: number | null;
 }
 
 export interface ChartData {
@@ -37,6 +39,8 @@ export type TradeAction = "buy" | "sell";
 export interface TradeRecord {
   filePath: string;
   date: string; // YYYY-MM-DD
+  /** 選填，成交時間 'HH:mm'（台灣時間）；缺少時 FIFO 排序視為當日最晚。 */
+  time?: string;
   seq: number;
   ticker: string;
   name: string;

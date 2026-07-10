@@ -9,7 +9,8 @@
           "instrumentType": "EQUITY",
           "regularMarketPrice": 985.0,
           "chartPreviousClose": 975.0,
-          "shortName": "TAIWAN SEMICONDUCTOR MANUFACTURING CO"
+          "shortName": "TAIWAN SEMICONDUCTOR MANUFACTURING CO",
+          "regularMarketTime": 1782885600
         },
         "timestamp": [1782694800, 1782781200, 1782867600],
         "indicators": {

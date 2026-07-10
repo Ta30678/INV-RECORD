@@ -59,6 +59,40 @@ describe("parseTradeFrontmatter", () => {
     expect(trade?.date).toBe("2026-07-01");
   });
 
+  it("YAML date 為非 UTC 午夜的 Date 物件時仍取台灣日期（不是 UTC 截字）", () => {
+    // UTC 2026-07-01 20:00 = 台灣 2026-07-02 04:00；若誤用 UTC 截字會得到 07-01
+    const { trade } = parseTradeFrontmatter(
+      { ...base, date: new Date(Date.UTC(2026, 6, 1, 20, 0, 0)) },
+      "40/a.md"
+    );
+    expect(trade?.date).toBe("2026-07-02");
+  });
+
+  it("time 合法（HH:mm）時保留", () => {
+    const { trade, issues } = parseTradeFrontmatter(
+      { ...base, time: "09:05" },
+      "40/a.md"
+    );
+    expect(issues).toHaveLength(0);
+    expect(trade?.time).toBe("09:05");
+  });
+
+  it("time 缺少時為 undefined，不產生 issue（向下相容）", () => {
+    const { trade, issues } = parseTradeFrontmatter(base, "40/a.md");
+    expect(issues).toHaveLength(0);
+    expect(trade?.time).toBeUndefined();
+  });
+
+  it("time 格式錯誤時忽略該欄並記警告，交易仍列入計算", () => {
+    const { trade, issues } = parseTradeFrontmatter(
+      { ...base, time: "9:5" },
+      "40/a.md"
+    );
+    expect(trade).not.toBeNull();
+    expect(trade?.time).toBeUndefined();
+    expect(issues.some((i) => i.message.includes("time"))).toBe(true);
+  });
+
   it("fee/tax 缺少時預設 0", () => {
     const { trade, issues } = parseTradeFrontmatter(
       { ...base, fee: undefined, tax: undefined },

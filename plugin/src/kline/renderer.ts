@@ -10,6 +10,7 @@ import {
 // 與 v4 的 chart.addCandlestickSeries(opts) 不同；本專案 pin ^5.2。
 import type InvRecordPlugin from "../main";
 import type { ChartData, KlineParams, KlinePeriod } from "../types";
+import { formatTaiwanDateTimeShort, marketSessionSuffix } from "../utils/time";
 import { periodLabel, periodToInterval } from "./blockParams";
 
 interface ThemeColors {
@@ -40,6 +41,7 @@ export class KlineRenderChild extends MarkdownRenderChild {
   private volume: ISeriesApi<"Histogram"> | null = null;
   private period: KlinePeriod;
   private headerEl!: HTMLElement;
+  private asOfEl!: HTMLElement;
   private statusEl!: HTMLElement;
   private chartEl!: HTMLElement;
   private periodButtons = new Map<KlinePeriod, HTMLButtonElement>();
@@ -83,6 +85,8 @@ export class KlineRenderChild extends MarkdownRenderChild {
     });
     refreshBtn.addEventListener("click", () => void this.refresh(true));
 
+    // 「資料截至」獨立一行，靠右對齊，答覆「這是不是最新」——見時間顯示決策備忘。
+    this.asOfEl = root.createDiv({ cls: "inv-kline-asof" });
     this.statusEl = root.createDiv({ cls: "inv-kline-status" });
     this.chartEl = root.createDiv({ cls: "inv-kline-chart" });
 
@@ -121,20 +125,44 @@ export class KlineRenderChild extends MarkdownRenderChild {
 
     const range = this.params.range ?? this.plugin.settings.defaultRange;
     try {
-      const { data, stale } = await this.plugin.yahoo.getChart(
+      const { data, stale, fetchedAt } = await this.plugin.yahoo.getChart(
         this.params.ticker,
         { interval: periodToInterval(this.period), range }
       );
       this.renderChart(data);
       this.updateTitle(data);
-      this.setStatus(stale ? "⚠ 無法連上 Yahoo，顯示上次快取資料" : "");
+      this.updateAsOf(data, stale, fetchedAt);
+      this.setStatus("");
     } catch (e) {
       this.destroyChart();
+      this.asOfEl.setText("");
       this.setStatus(
         `無法取得 ${this.params.ticker} 的資料：${e instanceof Error ? e.message : String(e)}`,
         true
       );
     }
+  }
+
+  /**
+   * 「資料截至」＝最後一根 K 棒的日期，答覆「圖上有沒有包含最近一個交易日」；
+   * regularMarketTime 只用來判斷後綴是盤中還是收盤；fetchedAt 只在快取回退時
+   * 才有決策意義（見時間顯示決策備忘：三個時間各司其職，不堆疊顯示）。
+   */
+  private updateAsOf(data: ChartData, stale: boolean, fetchedAt: number): void {
+    const lastBarDate = data.bars.at(-1)?.time;
+    this.asOfEl.toggleClass("inv-kline-stale", stale);
+    if (!lastBarDate) {
+      this.asOfEl.setText("");
+      return;
+    }
+    if (stale) {
+      this.asOfEl.setText(
+        `⚠ 快取資料｜截至 ${lastBarDate}｜抓取於 ${formatTaiwanDateTimeShort(fetchedAt)}`
+      );
+      return;
+    }
+    const suffix = marketSessionSuffix(data.meta.regularMarketTime);
+    this.asOfEl.setText(`資料截至 ${lastBarDate}${suffix}`);
   }
 
   private updateTitle(data: ChartData): void {

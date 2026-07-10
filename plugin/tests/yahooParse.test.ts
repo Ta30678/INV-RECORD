@@ -42,13 +42,16 @@ describe("parseChartResponse", () => {
     expect(meta.regularMarketPrice).toBe(985);
     expect(meta.previousClose).toBe(975);
     expect(meta.currency).toBe("TWD");
+    expect(meta.regularMarketTime).toBe(1782885600);
   });
 
   it("過濾 OHLC 含 null 的 bar，volume null 補 0", () => {
-    const { bars } = parseChartResponse(fixtureNulls);
+    const { bars, meta } = parseChartResponse(fixtureNulls);
     expect(bars).toHaveLength(2);
     expect(bars.map((b) => b.time)).toEqual(["2026-06-29", "2026-07-01"]);
     expect(bars[1].volume).toBe(0);
+    // fixture 沒有 regularMarketTime 欄位 → 取不到時為 null，不做假設
+    expect(meta.regularMarketTime).toBeNull();
   });
 
   it("Yahoo error 回應丟出 YahooParseError", () => {

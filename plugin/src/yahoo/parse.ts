@@ -1,20 +1,13 @@
 import type { ChartData, OhlcBar, QuoteMeta } from "../types";
+import { toTaiwanDateString } from "../utils/time";
 
 /**
  * 純函式：解析 Yahoo v8/finance/chart 回應。
  * 禁止 import 'obsidian'，以便在 vitest（node 環境）直接測試。
  */
 
-const TAIWAN_OFFSET_SECONDS = 8 * 3600;
-
-/** Yahoo 時間戳為 UTC；+8h 後取 UTC 年月日即為台灣交易日。 */
-export function toTaiwanDateString(unixSeconds: number): string {
-  const d = new Date((unixSeconds + TAIWAN_OFFSET_SECONDS) * 1000);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+// 時間單一事實來源在 utils/time.ts；這裡重新匯出以維持既有呼叫端（含測試）不變。
+export { toTaiwanDateString };
 
 export class YahooParseError extends Error {}
 
@@ -60,6 +53,8 @@ export function parseChartResponse(json: unknown): ChartData {
     ),
     currency: typeof rawMeta.currency === "string" ? rawMeta.currency : null,
     shortName: typeof rawMeta.shortName === "string" ? rawMeta.shortName : null,
+    // 最後成交/報價時間（unix 秒）；用來判斷「盤中」或「收盤」（見 utils/time.ts）。
+    regularMarketTime: num(rawMeta.regularMarketTime),
   };
 
   const timestamps = result.timestamp ?? [];

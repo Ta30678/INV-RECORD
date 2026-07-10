@@ -1,4 +1,5 @@
 import type { ParseIssue, TradeRecord } from "../types";
+import { taiwanDateStringFromMs } from "../utils/time";
 import { normalizeTicker } from "../yahoo/parse";
 
 /**
@@ -22,10 +23,15 @@ function asNonNegativeNumber(v: unknown, fallback: number): number | null {
   return typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-/** YAML date 可能是 Date 物件或字串；統一成 'YYYY-MM-DD'。 */
+/**
+ * YAML date 可能是 Date 物件或字串；統一成 'YYYY-MM-DD'。
+ * Date 物件分支改走台灣時區換算（與 utils/time.ts 同法），而不是 UTC 截字——
+ * 否則 Obsidian/YAML 把裸 datetime 解析成非 UTC 午夜的 Date 時，UTC 截字可能
+ * 落到前一日，讓交易被歸到錯誤日期並汙染 FIFO 排序與月/年損益歸屬。
+ */
 function asDateString(v: unknown): string | null {
   if (v instanceof Date && !isNaN(v.getTime())) {
-    return v.toISOString().slice(0, 10);
+    return taiwanDateStringFromMs(v.getTime());
   }
   if (typeof v === "string") {
     const m = v.trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
@@ -34,6 +40,21 @@ function asDateString(v: unknown): string | null {
     }
   }
   return null;
+}
+
+/** 選填的成交時間 'HH:mm'（24 小時制）；格式錯誤時回傳 undefined 並附警告訊息。 */
+function asTradeTime(v: unknown): { time: string | undefined; warning: string | null } {
+  if (v === undefined || v === null || v === "") {
+    return { time: undefined, warning: null };
+  }
+  const s = String(v).trim();
+  if (/^\d{2}:\d{2}$/.test(s)) {
+    return { time: s, warning: null };
+  }
+  return {
+    time: undefined,
+    warning: "time 格式須為 HH:mm（24 小時制），已忽略此欄位",
+  };
 }
 
 /**
@@ -85,7 +106,20 @@ export function parseTradeFrontmatter(
         ? seqRaw
         : Number(String(seqRaw)) || 0;
 
-  if (issues.length > 0) {
+  // time 為選填欄位，格式錯誤不影響整筆交易是否列入計算，只記警告並忽略該欄
+  // （與其餘必要欄位不同：那些欄位錯誤時整筆交易都不列入計算）。
+  const { time, warning: timeWarning } = asTradeTime(frontmatter.time);
+  if (timeWarning) issues.push({ filePath, message: timeWarning });
+
+  if (
+    !date ||
+    (action !== "buy" && action !== "sell") ||
+    !ticker ||
+    qty === null ||
+    price === null ||
+    fee === null ||
+    tax === null
+  ) {
     return { trade: null, issues };
   }
 
@@ -93,6 +127,7 @@ export function parseTradeFrontmatter(
     trade: {
       filePath,
       date: date!,
+      time,
       seq,
       ticker,
       name:
