@@ -1,3 +1,4 @@
 node_modules/
 plugin/main.js
 .DS_Store
+vault-template/.obsidian/workspace.json

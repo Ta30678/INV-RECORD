@@ -87,11 +87,15 @@ export function formatTaiwanDateTimeShort(
   return `${parts.y}-${pad(parts.m)}-${pad(parts.d)} ${pad(parts.hh)}:${pad(parts.mm)}`;
 }
 
-/** unix 秒是否落在台股盤中時段（09:00–13:30，含頭尾）。 */
+/**
+ * unix 秒是否落在台股盤中時段（09:00–13:30，含頭不含尾）。
+ * 13:30 是收盤撮合時點，Yahoo 的 regularMarketTime 收盤後會固定停在此刻，
+ * 若判為盤中會讓盤後看圖的人誤以為資料是即時的，故歸為收盤。
+ */
 export function isTaiwanMarketHours(unixSeconds: number): boolean {
   const { hh, mm } = taiwanParts(unixSeconds * 1000);
   const minutes = hh * 60 + mm;
-  return minutes >= 9 * 60 && minutes <= 13 * 60 + 30;
+  return minutes >= 9 * 60 && minutes < 13 * 60 + 30;
 }
 
 /**

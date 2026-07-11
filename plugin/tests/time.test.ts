@@ -89,8 +89,14 @@ describe("isTaiwanMarketHours / marketSessionSuffix", () => {
     expect(marketSessionSuffix(sec)).toBe("（盤中）");
   });
 
-  it("13:30 台灣時間屬於盤中（含尾）", () => {
+  it("13:30 收盤撮合時點判為收盤（Yahoo 盤後 regularMarketTime 停在此刻）", () => {
     const sec = Date.UTC(2026, 6, 10, 5, 30, 0) / 1000; // 台灣 13:30
+    expect(isTaiwanMarketHours(sec)).toBe(false);
+    expect(marketSessionSuffix(sec)).toBe("（收盤）");
+  });
+
+  it("13:29 台灣時間仍屬盤中", () => {
+    const sec = Date.UTC(2026, 6, 10, 5, 29, 0) / 1000; // 台灣 13:29
     expect(isTaiwanMarketHours(sec)).toBe(true);
   });
 
