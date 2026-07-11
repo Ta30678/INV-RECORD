@@ -6,6 +6,7 @@ import {
   findStockNoteByTicker,
   findThemeNoteByName,
   parseThemeNames,
+  stockNoteBaseName,
   wikilinkFromPath,
   type VaultNoteRef,
 } from "../src/trades/noteLinks";
@@ -112,6 +113,20 @@ describe("buildUpFieldValue", () => {
     expect(buildUpFieldValue(["AI 半導體", "先進封裝"])).toBe(
       `["[[AI 半導體]]", "[[先進封裝]]"]`
     );
+  });
+});
+
+describe("stockNoteBaseName", () => {
+  it("有名稱時為「名稱 代號」", () => {
+    expect(stockNoteBaseName("2330", "台積電")).toBe("台積電 2330");
+  });
+
+  it("名稱留空時只用代號，不產生「2330 2330」重複 token", () => {
+    expect(stockNoteBaseName("2330", "")).toBe("2330");
+  });
+
+  it("名稱只有空白時視同留空", () => {
+    expect(stockNoteBaseName("2330", "   ")).toBe("2330");
   });
 });
 

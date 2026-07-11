@@ -75,7 +75,15 @@ describe("ticker/symbol 轉換", () => {
   });
   it("normalizeTicker 去除後綴、trim、大寫", () => {
     expect(normalizeTicker(" 2330.TW ")).toBe("2330");
-    expect(normalizeTicker("6488.two")).toBe("6488");
     expect(normalizeTicker("0050")).toBe("0050");
+  });
+
+  it("normalizeTicker 保留上櫃 .TWO 後綴（canonical ticker）", () => {
+    expect(normalizeTicker("6488.two")).toBe("6488.TWO");
+    expect(normalizeTicker(" 6488.TWO ")).toBe("6488.TWO");
+  });
+
+  it("toYahooSymbol 對 .TWO 直接使用，不誤補 .TW", () => {
+    expect(toYahooSymbol("6488.TWO")).toBe("6488.TWO");
   });
 });

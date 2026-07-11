@@ -1,7 +1,8 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, type TextComponent } from "obsidian";
 import type InvRecordPlugin from "./main";
 import type { DashboardRangeKey } from "./trades/portfolio";
 import type { KlineRange } from "./types";
+import { normalizeTicker } from "./yahoo/parse";
 
 export interface InvRecordSettings {
   /** 交易紀錄資料夾（vault 相對路徑） */
@@ -23,6 +24,10 @@ export interface InvRecordSettings {
   feeRate: number;
   feeDiscount: number;
   taxRate: number;
+  /** 整股最低手續費（元），預設 20 */
+  minFee: number;
+  /** 零股最低手續費（元），依券商而異，預設 1 */
+  oddLotMinFee: number;
 }
 
 export const DEFAULT_SETTINGS: InvRecordSettings = {
@@ -38,6 +43,8 @@ export const DEFAULT_SETTINGS: InvRecordSettings = {
   feeRate: 0.001425,
   feeDiscount: 1,
   taxRate: 0.003,
+  minFee: 20,
+  oddLotMinFee: 1,
 };
 
 const RANGE_OPTIONS: Record<KlineRange, string> = {
@@ -56,6 +63,15 @@ export class InvRecordSettingTab extends PluginSettingTab {
     private plugin: InvRecordPlugin
   ) {
     super(app, plugin);
+  }
+
+  /**
+   * 數值欄位驗證失敗時的共用回饋：原本靜默忽略會讓輸入框留著錯誤字串、
+   * 使用者不知道值沒被採用；改成跳 Notice 並把欄位還原成目前生效的值。
+   */
+  private rejectInvalidNumber(t: TextComponent, label: string, revertTo: number): void {
+    new Notice(`${label}輸入無效，已還原為 ${revertTo}`);
+    t.setValue(String(revertTo));
   }
 
   display(): void {
@@ -80,6 +96,7 @@ export class InvRecordSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("個股筆記資料夾")
+      .setDesc("「新增個股筆記」指令的預設存放位置")
       .addText((t) =>
         t
           .setValue(this.plugin.settings.stocksFolder)
@@ -91,6 +108,7 @@ export class InvRecordSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("題材筆記資料夾")
+      .setDesc("「新增題材筆記」指令的預設存放位置")
       .addText((t) =>
         t
           .setValue(this.plugin.settings.themeFolder)
@@ -102,6 +120,7 @@ export class InvRecordSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("總經筆記資料夾")
+      .setDesc("「新增總經筆記」指令的預設存放位置")
       .addText((t) =>
         t
           .setValue(this.plugin.settings.macroFolder)
@@ -148,6 +167,8 @@ export class InvRecordSettingTab extends PluginSettingTab {
               this.plugin.settings.cacheTtlMinutes = n;
               this.plugin.yahoo.ttlMs = n * 60_000;
               await this.plugin.saveSettings();
+            } else {
+              this.rejectInvalidNumber(t, "報價快取時間", this.plugin.settings.cacheTtlMinutes);
             }
           })
       );
@@ -156,14 +177,14 @@ export class InvRecordSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("自選股清單")
-      .setDesc("逗號分隔，例如：2330, 3661, 0050。持倉股票會自動顯示，不需重複填。")
+      .setDesc("逗號分隔，例如：2330, 3661, 0050（上櫃請加 .TWO，例如 6488.TWO）。持倉股票會自動顯示，不需重複填。")
       .addTextArea((t) =>
         t
           .setValue(this.plugin.settings.watchlist.join(", "))
           .onChange(async (v) => {
             this.plugin.settings.watchlist = v
               .split(/[,，\s]+/)
-              .map((s) => s.trim().toUpperCase().replace(/\.(TW|TWO)$/i, ""))
+              .map((s) => normalizeTicker(s))
               .filter((s) => s.length > 0);
             await this.plugin.saveSettings();
           })
@@ -180,6 +201,8 @@ export class InvRecordSettingTab extends PluginSettingTab {
           if (Number.isFinite(n) && n >= 0) {
             this.plugin.settings.feeRate = n;
             await this.plugin.saveSettings();
+          } else {
+            this.rejectInvalidNumber(t, "手續費率", this.plugin.settings.feeRate);
           }
         })
       );
@@ -195,19 +218,58 @@ export class InvRecordSettingTab extends PluginSettingTab {
             if (Number.isFinite(n) && n > 0 && n <= 1) {
               this.plugin.settings.feeDiscount = n;
               await this.plugin.saveSettings();
+            } else {
+              this.rejectInvalidNumber(t, "手續費折扣", this.plugin.settings.feeDiscount);
+            }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("整股最低手續費（元）")
+      .setDesc("股數為 1000 股整數倍時套用，預設 20 元")
+      .addText((t) =>
+        t.setValue(String(this.plugin.settings.minFee)).onChange(async (v) => {
+          const n = Number(v);
+          if (Number.isFinite(n) && n >= 0) {
+            this.plugin.settings.minFee = n;
+            await this.plugin.saveSettings();
+          } else {
+            this.rejectInvalidNumber(t, "整股最低手續費", this.plugin.settings.minFee);
+          }
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("零股最低手續費（元）")
+      .setDesc("股數非 1000 股整數倍時套用；依券商而異，多數電子下單為 1 元，請以對帳單為準")
+      .addText((t) =>
+        t
+          .setValue(String(this.plugin.settings.oddLotMinFee))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n >= 0) {
+              this.plugin.settings.oddLotMinFee = n;
+              await this.plugin.saveSettings();
+            } else {
+              this.rejectInvalidNumber(t, "零股最低手續費", this.plugin.settings.oddLotMinFee);
             }
           })
       );
 
     new Setting(containerEl)
       .setName("證交稅率")
-      .setDesc("一般股票 0.003；ETF 0.001（請自行調整）")
+      .setDesc(
+        "一般股票 0.003（新增交易 Modal 的「證交稅別」下拉會以此為「一般股票」選項的稅率；" +
+          "ETF、債券ETF 兩個選項固定 0.001／0，不受此設定影響）"
+      )
       .addText((t) =>
         t.setValue(String(this.plugin.settings.taxRate)).onChange(async (v) => {
           const n = Number(v);
           if (Number.isFinite(n) && n >= 0) {
             this.plugin.settings.taxRate = n;
             await this.plugin.saveSettings();
+          } else {
+            this.rejectInvalidNumber(t, "證交稅率", this.plugin.settings.taxRate);
           }
         })
       );

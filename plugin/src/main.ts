@@ -13,7 +13,7 @@ import {
   type InvRecordSettings,
 } from "./settings";
 import { TradeStore } from "./trades/store";
-import { YahooClient } from "./yahoo/client";
+import { describeYahooFetchError, YahooClient } from "./yahoo/client";
 
 export default class InvRecordPlugin extends Plugin {
   settings: InvRecordSettings = DEFAULT_SETTINGS;
@@ -23,13 +23,32 @@ export default class InvRecordPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
 
-    // requestUrl 由 Obsidian 提供，原生繞過 CORS
+    // requestUrl 由 Obsidian 提供，原生繞過 CORS。
+    // throw:false + 手動分類錯誤，才能把「查無代號」「連不上網路」分開顯示成
+    // 可行動的中文訊息，而不是把 requestUrl 丟出的原始英文例外直接印給使用者看。
     this.yahoo = new YahooClient(async (url: string) => {
-      const res = await requestUrl({
-        url,
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      return res.json;
+      let res;
+      try {
+        res = await requestUrl({
+          url,
+          headers: { "User-Agent": "Mozilla/5.0" },
+          throw: false,
+        });
+      } catch {
+        throw new Error("無法連上 Yahoo，請檢查網路連線");
+      }
+      const m = url.match(/chart\/([^?]+)/);
+      const symbol = m ? decodeURIComponent(m[1]) : "";
+      let body: unknown = null;
+      try {
+        body = res.json;
+      } catch {
+        // 回應不是合法 JSON，交由下方當一般錯誤處理
+      }
+      const errMsg = describeYahooFetchError(res.status, body, symbol);
+      if (errMsg) throw new Error(errMsg);
+      if (body === null) throw new Error(`無法解析 ${symbol} 的回應內容`);
+      return body;
     }, this.settings.cacheTtlMinutes * 60_000);
 
     this.tradeStore = new TradeStore(this.app, this);

@@ -121,7 +121,9 @@ export class KlineRenderChild extends MarkdownRenderChild {
       btn.toggleClass("is-active", p === this.period);
     }
     this.setStatus("載入中…");
-    if (force) this.plugin.yahoo.clearCache();
+    // 只清這張圖代號的快取，不影響其他已開圖表或儀表板的快取
+    // （見 clearCache 全清問題的決策備忘）。
+    if (force) this.plugin.yahoo.invalidateTicker(this.params.ticker);
 
     const range = this.params.range ?? this.plugin.settings.defaultRange;
     try {

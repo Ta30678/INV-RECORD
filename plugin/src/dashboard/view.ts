@@ -148,7 +148,9 @@ export class DashboardView extends ItemView {
       text: "⟳ 更新報價",
     });
     refreshBtn.addEventListener("click", () => {
-      this.plugin.yahoo.clearCache();
+      // 只清持倉／自選股這些代號的快取，不動到其他已開 K 線圖的快取
+      // （見 clearCache 全清問題的決策備忘）。
+      this.plugin.yahoo.invalidateTickers(this.plugin.tradeStore.tickersToQuote());
       void this.refreshQuotes();
     });
 

@@ -73,6 +73,16 @@ export function parseThemeNames(raw: string): string[] {
 }
 
 /**
+ * 個股筆記檔名（不含資料夾與副檔名）。名稱留空時只用代號，
+ * 避免「2330 2330.md」這種重複 token（見雙向鏈結決策備忘）；
+ * 有名稱時維持「名稱 代號」慣例（例如「台積電 2330」），與 stockLink 命名規則一致。
+ */
+export function stockNoteBaseName(ticker: string, name: string): string {
+  const trimmedName = name.trim();
+  return trimmedName ? `${trimmedName} ${ticker}` : ticker;
+}
+
+/**
  * 組出個股筆記 up: frontmatter 的值（含引號/陣列語法，不含欄位名）。
  * 0 個題材 → `""`；1 個 → 單一字串；多個 → YAML 行內陣列（一檔個股可橫跨多題材）。
  */

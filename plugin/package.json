@@ -1,6 +1,6 @@
 {
   "name": "inv-record",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "台股投資追蹤 Obsidian 外掛：K 線圖、交易紀錄與損益儀表板",
   "main": "main.js",
   "private": true,

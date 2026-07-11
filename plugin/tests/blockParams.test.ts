@@ -27,6 +27,12 @@ describe("parseKlineBlock", () => {
     expect(parseKlineBlock("2330.TW").ticker).toBe("2330");
   });
 
+  it("上櫃代號保留 .TWO 後綴", () => {
+    expect(parseKlineBlock("6488.TWO").ticker).toBe("6488.TWO");
+    expect(parseKlineBlock("6488.two").ticker).toBe("6488.TWO");
+    expect(parseKlineBlock("ticker: 6488.two").ticker).toBe("6488.TWO");
+  });
+
   it("period 大小寫不拘、支援中文", () => {
     expect(parseKlineBlock("2330\nperiod: m").period).toBe("M");
     expect(parseKlineBlock("2330\n週期: 月").period).toBe("M");

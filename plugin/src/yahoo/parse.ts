@@ -84,14 +84,19 @@ export function parseChartResponse(json: unknown): ChartData {
   return { bars, meta };
 }
 
-/** '2330' / '2330.TW' / '0050' → Yahoo symbol（預設補 .TW） */
+/** '2330' / '2330.TW' / '6488.TWO' → Yahoo symbol（上市預設補 .TW，上櫃保留 .TWO） */
 export function toYahooSymbol(ticker: string): string {
   const t = ticker.trim().toUpperCase();
   if (t.includes(".")) return t;
   return `${t}.TW`;
 }
 
-/** Yahoo symbol / 使用者輸入 → 純代號（去除 .TW/.TWO 後綴） */
+/**
+ * Yahoo symbol / 使用者輸入 → canonical ticker（見 canonical ticker 決策備忘）。
+ * 上市股票只有純代號（隱含 .TW，去除後綴）；上櫃股票保留 .TWO 後綴——
+ * 只剝除結尾的 .TW，.TWO 結尾不受影響（'6488.TWO' 不會被誤剝成 '6488'）。
+ * 全管線（normalize→frontmatter→FIFO 分組→Yahoo symbol）一律使用同一形態。
+ */
 export function normalizeTicker(ticker: string): string {
-  return ticker.trim().toUpperCase().replace(/\.(TW|TWO)$/i, "");
+  return ticker.trim().toUpperCase().replace(/\.TW$/, "");
 }

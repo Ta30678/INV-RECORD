@@ -80,7 +80,10 @@ export class YahooClient {
     }
   }
 
-  /** 即時報價（給儀表板未實現損益）：用日K短 range，共用同一快取。 */
+  /**
+   * 即時報價（給儀表板未實現損益）：固定用 1d/5d 專屬 cache key 抓取，
+   * 與圖表（interval/range 由使用者/設定決定）各自獨立快取，不共用。
+   */
   async getQuote(
     ticker: string
   ): Promise<{ price: number | null; stale: boolean; fetchedAt: number }> {
@@ -95,7 +98,48 @@ export class YahooClient {
     return { price, stale, fetchedAt };
   }
 
+  /** 清空全部快取（所有代號、所有 interval/range）。給「清除快取並更新報價」指令使用。 */
   clearCache(): void {
     this.cache.clear();
   }
+
+  /**
+   * 只清除單一代號的快取（所有 interval/range），不影響其他已開圖表或
+   * 儀表板其他持股的快取——避免單張圖 / 單檔股票的強制更新誤觸全域重抓
+   * （見 clearCache 全清問題的決策備忘）。
+   */
+  invalidateTicker(ticker: string): void {
+    const prefix = `${ticker}|`;
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) this.cache.delete(key);
+    }
+  }
+
+  /** invalidateTicker 的多檔版本，供儀表板「更新報價」按鈕使用。 */
+  invalidateTickers(tickers: string[]): void {
+    for (const t of tickers) this.invalidateTicker(t);
+  }
+}
+
+/**
+ * 依 Yahoo 回應的 HTTP 狀態與內容，判斷是否為「查無代號」等可辨識錯誤，
+ * 回傳給使用者看的中文訊息；回傳 null 時交由呼叫端當一般網路/伺服器錯誤處理。
+ * 純函式（不 import 'obsidian'），main.ts 的 fetchJson 包一層呼叫它。
+ */
+export function describeYahooFetchError(
+  status: number,
+  body: unknown,
+  ticker: string
+): string | null {
+  const hasChartError =
+    typeof body === "object" &&
+    body !== null &&
+    (body as { chart?: { error?: unknown } }).chart?.error != null;
+  if (status === 404 || hasChartError) {
+    return `查無代號 ${ticker}，請確認上市代號或上櫃請加 .TWO（例如 6488.TWO）`;
+  }
+  if (status < 200 || status >= 300) {
+    return `無法連上 Yahoo（HTTP ${status}），請稍後再試`;
+  }
+  return null;
 }

@@ -64,8 +64,11 @@ export function parseKlineBlock(source: string): KlineParams {
     // 未知 key：忽略
   }
 
-  if (!ticker || !/^[0-9A-Z]+$/.test(ticker)) {
-    throw new KlineParamsError("kline 區塊缺少有效的股票代號（例如 2330）");
+  // 上市為純代號，上櫃保留 .TWO 後綴（normalizeTicker 已統一大寫並剝除 .TW）
+  if (!ticker || !/^[0-9A-Z]+(\.TWO)?$/.test(ticker)) {
+    throw new KlineParamsError(
+      "kline 區塊缺少有效的股票代號（例如 2330，上櫃請用 6488.TWO）"
+    );
   }
 
   return { ticker, period, range };

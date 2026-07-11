@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { YahooClient } from "../src/yahoo/client";
+import { describeYahooFetchError, YahooClient } from "../src/yahoo/client";
 import fixture2330 from "./fixtures/yahoo-2330-1d.json";
 
 function makeClient(opts?: {
@@ -102,5 +102,57 @@ describe("YahooClient", () => {
     const r2 = await client.getChart("3661", CHART_OPTS);
     expect(r1.fetchedAt).toBe(0);
     expect(r2.fetchedAt).toBe(5_000);
+  });
+
+  it("invalidateTicker 只清該代號的快取，不影響其他代號", async () => {
+    const { client, fetchJson } = makeClient();
+    await client.getChart("2330", CHART_OPTS);
+    await client.getChart("3661", CHART_OPTS);
+    client.invalidateTicker("2330");
+    await client.getChart("2330", CHART_OPTS); // 重抓
+    await client.getChart("3661", CHART_OPTS); // 應命中快取
+    expect(fetchJson).toHaveBeenCalledTimes(3);
+  });
+
+  it("invalidateTicker 清除同代號下所有 interval/range 的快取", async () => {
+    const { client, fetchJson } = makeClient();
+    await client.getChart("2330", CHART_OPTS);
+    await client.getChart("2330", { interval: "1wk", range: "1y" });
+    client.invalidateTicker("2330");
+    await client.getChart("2330", CHART_OPTS);
+    await client.getChart("2330", { interval: "1wk", range: "1y" });
+    expect(fetchJson).toHaveBeenCalledTimes(4);
+  });
+
+  it("invalidateTickers 可一次清多檔", async () => {
+    const { client, fetchJson } = makeClient();
+    await client.getChart("2330", CHART_OPTS);
+    await client.getChart("3661", CHART_OPTS);
+    client.invalidateTickers(["2330", "3661"]);
+    await client.getChart("2330", CHART_OPTS);
+    await client.getChart("3661", CHART_OPTS);
+    expect(fetchJson).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("describeYahooFetchError", () => {
+  it("404 回傳查無代號的中文訊息，並附上代號與 .TWO 提示", () => {
+    const msg = describeYahooFetchError(404, null, "9999.TW");
+    expect(msg).toContain("9999.TW");
+    expect(msg).toContain(".TWO");
+  });
+
+  it("200 但 body 帶 chart.error 也視為查無代號", () => {
+    const msg = describeYahooFetchError(200, { chart: { error: { code: "Not Found" } } }, "9999.TW");
+    expect(msg).toContain("查無代號");
+  });
+
+  it("其他非 2xx 狀態回傳一般伺服器錯誤訊息", () => {
+    const msg = describeYahooFetchError(500, null, "2330.TW");
+    expect(msg).toContain("HTTP 500");
+  });
+
+  it("2xx 且無 chart.error 時回傳 null（交由呼叫端當正常回應處理）", () => {
+    expect(describeYahooFetchError(200, { chart: { result: [] } }, "2330.TW")).toBeNull();
   });
 });

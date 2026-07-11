@@ -7,6 +7,7 @@ import {
   findStockNoteByTicker,
   findThemeNoteByName,
   parseThemeNames,
+  stockNoteBaseName,
   wikilinkFromPath,
   type VaultNoteRef,
 } from "../trades/noteLinks";
@@ -50,6 +51,21 @@ async function createAndOpen(app: App, path: string, content: string): Promise<v
   }
 }
 
+/** 證交稅別：稅率由標的類型決定，Yahoo 無可靠類型欄位可自動判別，故用下拉手選。 */
+type TaxKind = "normal" | "etf" | "bondEtf";
+
+/** "normal" 回傳 undefined，改用全域 taxRate 設定；ETF/債券ETF 為固定覆寫稅率。 */
+const TAX_KIND_RATES: Record<TaxKind, number | undefined> = {
+  normal: undefined,
+  etf: 0.001,
+  bondEtf: 0,
+};
+
+/** 0.003 → "0.3%"（避免浮點數乘法產生的尾數雜訊，例如 0.003*100=0.30000000000000004） */
+function formatPercent(rate: number): string {
+  return `${Number((rate * 100).toFixed(4))}%`;
+}
+
 /** 新增交易紀錄的輸入 Modal：自動試算手續費與證交稅。 */
 export class NewTradeModal extends Modal {
   private date = taiwanToday();
@@ -62,6 +78,7 @@ export class NewTradeModal extends Modal {
   private price = 0;
   private fee = 0;
   private tax = 0;
+  private taxKind: TaxKind = "normal";
   private feeTouched = false;
   private taxTouched = false;
   private feeInput: HTMLInputElement | null = null;
@@ -80,18 +97,25 @@ export class NewTradeModal extends Modal {
       feeRate: s.feeRate,
       feeDiscount: s.feeDiscount,
       taxRate: s.taxRate,
-      minFee: 20,
+      minFee: s.minFee,
+      oddLotMinFee: s.oddLotMinFee,
     };
   }
 
-  /** 使用者沒手動改過費用時，隨股數/價格重算 */
+  /** 使用者沒手動改過費用時，隨股數/價格/證交稅別重算 */
   private recalcFees(): void {
     if (!this.feeTouched) {
       this.fee = estimateFee(this.qty, this.price, this.feeSettings());
       if (this.feeInput) this.feeInput.value = String(this.fee);
     }
     if (!this.taxTouched) {
-      this.tax = estimateTax(this.qty, this.price, this.action, this.feeSettings());
+      this.tax = estimateTax(
+        this.qty,
+        this.price,
+        this.action,
+        this.feeSettings(),
+        TAX_KIND_RATES[this.taxKind]
+      );
       if (this.taxInput) this.taxInput.value = String(this.tax);
     }
   }
@@ -113,7 +137,7 @@ export class NewTradeModal extends Modal {
 
     new Setting(contentEl)
       .setName("代號")
-      .setDesc("例如 2330、0050")
+      .setDesc("例如 2330、0050；上櫃請加 .TWO，例如 6488.TWO")
       .addText((t) =>
         t.setPlaceholder("2330").onChange((v) => (this.ticker = normalizeTicker(v)))
       );
@@ -139,6 +163,21 @@ export class NewTradeModal extends Modal {
           this.recalcFees();
         })
     );
+
+    new Setting(contentEl)
+      .setName("證交稅別")
+      .setDesc("僅影響證交稅試算預填；不會另存欄位，frontmatter 只記最終 tax 金額")
+      .addDropdown((d) =>
+        d
+          .addOption("normal", `一般股票 ${formatPercent(this.plugin.settings.taxRate)}`)
+          .addOption("etf", `ETF ${formatPercent(TAX_KIND_RATES.etf!)}`)
+          .addOption("bondEtf", "債券ETF 0%（現行免徵）")
+          .setValue(this.taxKind)
+          .onChange((v) => {
+            this.taxKind = v as TaxKind;
+            this.recalcFees();
+          })
+      );
 
     new Setting(contentEl)
       .setName("股數")
@@ -287,9 +326,12 @@ export class NewStockNoteModal extends Modal {
   onOpen(): void {
     this.titleEl.setText("新增個股筆記");
     const { contentEl } = this;
-    new Setting(contentEl).setName("代號").addText((t) =>
-      t.setPlaceholder("2330").onChange((v) => (this.ticker = normalizeTicker(v)))
-    );
+    new Setting(contentEl)
+      .setName("代號")
+      .setDesc("例如 2330、0050；上櫃請加 .TWO，例如 6488.TWO")
+      .addText((t) =>
+        t.setPlaceholder("2330").onChange((v) => (this.ticker = normalizeTicker(v)))
+      );
     new Setting(contentEl).setName("名稱").addText((t) =>
       t.setPlaceholder("台積電").onChange((v) => (this.name = v.trim()))
     );
@@ -321,7 +363,9 @@ export class NewStockNoteModal extends Modal {
     const s = this.plugin.settings;
     await ensureFolder(this.app, s.stocksFolder);
     const displayName = this.name || this.ticker;
-    const path = normalizePath(`${s.stocksFolder}/${displayName} ${this.ticker}.md`);
+    const path = normalizePath(
+      `${s.stocksFolder}/${stockNoteBaseName(this.ticker, this.name)}.md`
+    );
     if (this.app.vault.getAbstractFileByPath(path)) {
       new Notice("這檔股票的筆記已存在");
       return;
