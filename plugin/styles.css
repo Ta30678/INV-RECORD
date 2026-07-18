@@ -77,6 +77,40 @@
   width: 100%;
 }
 
+/* ── invchart 圖表 ── */
+.inv-chart {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: 8px 10px 10px;
+  margin: 8px 0;
+}
+
+.inv-chart-title {
+  font-weight: 600;
+  font-size: var(--font-ui-small);
+  margin-bottom: 6px;
+}
+
+.inv-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.inv-chart-footer {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  margin-top: 6px;
+}
+
+.inv-chart-status {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.inv-chart-error {
+  color: var(--text-error);
+}
+
 /* ── 績效儀表板 ── */
 .inv-dashboard {
   padding: 8px 12px;

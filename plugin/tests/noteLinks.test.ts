@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  basenameNoExt,
   buildUpFieldValue,
   checkStockLinkConsistency,
   findNoteByTypeAndBasename,
+  findPrimaryThemePath,
   findStockNoteByTicker,
   findThemeNoteByName,
   parseThemeNames,
@@ -75,6 +77,47 @@ describe("findThemeNoteByName / findNoteByTypeAndBasename", () => {
     expect(findNoteByTypeAndBasename(notes, "macro", "總經 MOC")).toBe(
       "10-總經/總經 MOC.md"
     );
+  });
+});
+
+describe("basenameNoExt", () => {
+  it("去除資料夾與副檔名", () => {
+    expect(basenameNoExt("30-個股/AI 半導體/台積電 2330.md")).toBe("台積電 2330");
+  });
+
+  it("多層子資料夾也正確", () => {
+    expect(basenameNoExt("20-題材/先進封裝 CoWoS.md")).toBe("先進封裝 CoWoS");
+  });
+
+  it("無資料夾時也正確", () => {
+    expect(basenameNoExt("2330.md")).toBe("2330");
+  });
+});
+
+describe("findPrimaryThemePath", () => {
+  const notes: VaultNoteRef[] = [
+    { path: "20-題材/先進封裝 CoWoS.md", frontmatter: { type: "theme" } },
+    { path: "20-題材/成熟製程.md", frontmatter: { type: "theme" } },
+  ];
+
+  it("取第一個能解析到現存題材筆記的名稱", () => {
+    expect(findPrimaryThemePath(notes, ["不存在題材", "成熟製程", "先進封裝 CoWoS"])).toBe(
+      "20-題材/成熟製程.md"
+    );
+  });
+
+  it("第一個題材就存在時直接回傳", () => {
+    expect(findPrimaryThemePath(notes, ["先進封裝 CoWoS", "成熟製程"])).toBe(
+      "20-題材/先進封裝 CoWoS.md"
+    );
+  });
+
+  it("全部找不到回傳 null", () => {
+    expect(findPrimaryThemePath(notes, ["不存在A", "不存在B"])).toBeNull();
+  });
+
+  it("空陣列回傳 null", () => {
+    expect(findPrimaryThemePath(notes, [])).toBeNull();
   });
 });
 

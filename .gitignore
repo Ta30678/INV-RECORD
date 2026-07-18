@@ -2,3 +2,6 @@ node_modules/
 plugin/main.js
 .DS_Store
 vault-template/.obsidian/workspace.json
+
+# 個人實際使用的 vault（含個人投資資料，不進版控）
+vault/

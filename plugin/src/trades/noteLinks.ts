@@ -14,7 +14,8 @@ export interface VaultNoteRef {
   frontmatter: Record<string, unknown> | undefined;
 }
 
-function basenameNoExt(path: string): string {
+/** 由完整路徑取出檔名（去除資料夾與副檔名）；資料夾可為任意深度的子資料夾。 */
+export function basenameNoExt(path: string): string {
   const slash = path.lastIndexOf("/");
   const base = slash >= 0 ? path.slice(slash + 1) : path;
   return base.replace(/\.md$/i, "");
@@ -70,6 +71,21 @@ export function parseThemeNames(raw: string): string[] {
     .split(/[,，、]+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+}
+
+/**
+ * 依序尋找第一個能解析到現存題材筆記（type: theme）的題材名稱，回傳該筆記路徑；
+ * 全部找不到則回傳 null。用於新建個股筆記時決定「主題材」子資料夾（見個股筆記歸檔決策備忘）。
+ */
+export function findPrimaryThemePath(
+  notes: VaultNoteRef[],
+  themeNames: string[]
+): string | null {
+  for (const name of themeNames) {
+    const path = findThemeNoteByName(notes, name);
+    if (path) return path;
+  }
+  return null;
 }
 
 /**

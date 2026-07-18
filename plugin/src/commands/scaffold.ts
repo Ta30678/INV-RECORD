@@ -2,8 +2,10 @@ import { App, Modal, Notice, Setting, TFile, normalizePath } from "obsidian";
 import type InvRecordPlugin from "../main";
 import { estimateFee, estimateTax, type FeeSettings } from "../trades/fees";
 import {
+  basenameNoExt,
   buildUpFieldValue,
   findNoteByTypeAndBasename,
+  findPrimaryThemePath,
   findStockNoteByTicker,
   findThemeNoteByName,
   parseThemeNames,
@@ -361,15 +363,6 @@ export class NewStockNoteModal extends Modal {
       return;
     }
     const s = this.plugin.settings;
-    await ensureFolder(this.app, s.stocksFolder);
-    const displayName = this.name || this.ticker;
-    const path = normalizePath(
-      `${s.stocksFolder}/${stockNoteBaseName(this.ticker, this.name)}.md`
-    );
-    if (this.app.vault.getAbstractFileByPath(path)) {
-      new Notice("這檔股票的筆記已存在");
-      return;
-    }
 
     // up: 支援多題材（一檔個股可橫跨多題材），只認既有題材筆記的檔名；
     // 找不到的題材仍會寫入連結，但另外提醒使用者建立，避免建檔流程被卡住。
@@ -380,6 +373,23 @@ export class NewStockNoteModal extends Modal {
       new Notice(`尚無題材筆記：${missing.join("、")}，建議先用「新增題材筆記」建立`);
     }
     const upValue = buildUpFieldValue(themeNames);
+
+    // 主題材：依序取第一個能解析到現存題材筆記者，決定存檔子資料夾
+    // （stocksFolder/主題材筆記檔名/）；無任何可解析題材則放 stocksFolder 根目錄。
+    const primaryThemePath = findPrimaryThemePath(notes, themeNames);
+    const targetFolder = primaryThemePath
+      ? normalizePath(`${s.stocksFolder}/${basenameNoExt(primaryThemePath)}`)
+      : normalizePath(s.stocksFolder);
+    await ensureFolder(this.app, targetFolder);
+
+    const displayName = this.name || this.ticker;
+    const path = normalizePath(
+      `${targetFolder}/${stockNoteBaseName(this.ticker, this.name)}.md`
+    );
+    if (this.app.vault.getAbstractFileByPath(path)) {
+      new Notice("這檔股票的筆記已存在");
+      return;
+    }
 
     const content = `---
 type: stock

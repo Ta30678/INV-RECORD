@@ -1,4 +1,5 @@
 import { Plugin, requestUrl, type WorkspaceLeaf } from "obsidian";
+import { registerChartProcessor } from "./charts/processor";
 import { DASHBOARD_VIEW_TYPE, DashboardView } from "./dashboard/view";
 import { registerKlineProcessor } from "./kline/processor";
 import {
@@ -55,6 +56,7 @@ export default class InvRecordPlugin extends Plugin {
     this.addChild(this.tradeStore);
 
     registerKlineProcessor(this);
+    registerChartProcessor(this);
 
     this.registerView(
       DASHBOARD_VIEW_TYPE,

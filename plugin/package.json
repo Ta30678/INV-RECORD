@@ -11,7 +11,11 @@
     "install:vault": "node scripts/install-to-vault.mjs",
     "check:yahoo": "node scripts/live-yahoo-check.mjs"
   },
-  "keywords": ["obsidian", "taiwan-stock", "investment"],
+  "keywords": [
+    "obsidian",
+    "taiwan-stock",
+    "investment"
+  ],
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -23,6 +27,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "chart.js": "^4.5.1",
     "lightweight-charts": "^5.2.0"
   }
 }

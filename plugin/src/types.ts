@@ -33,6 +33,37 @@ export interface KlineParams {
   range: KlineRange | null; // null → 使用外掛設定的預設值
 }
 
+/** ```invchart 圖表類型；規格見 docs/圖表語法.md */
+export type ChartType = "bar" | "line" | "pie" | "donut" | "bar-line";
+/** series[].type：僅 bar-line 圖使用，決定該系列畫成長條或折線 */
+export type ChartSeriesType = "bar" | "line";
+/** series[].yAxis：預設 left；right 僅 bar-line 圖可用 */
+export type ChartYAxis = "left" | "right";
+
+export interface ChartSeriesParams {
+  name: string;
+  data: number[];
+  /** 僅 type: bar-line 時有意義 */
+  type?: ChartSeriesType;
+  yAxis: ChartYAxis;
+}
+
+/** normalizeChartParams 驗證通過後的合法參數（見 plugin/src/charts/blockParams.ts） */
+export interface ChartBlockParams {
+  type: ChartType;
+  title: string;
+  labels: string[];
+  series: ChartSeriesParams[];
+  unit?: string;
+  unitRight?: string;
+  source: string;
+  asOf: string;
+  stacked: boolean;
+  horizontal: boolean;
+  colors?: string[];
+  height: number;
+}
+
 export type TradeAction = "buy" | "sell";
 
 /** 由交易筆記 frontmatter 解析出的一筆交易 */
